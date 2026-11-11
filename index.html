@@ -568,7 +568,6 @@
     <div id="keyGroup">
       <label for="keyInput">รหัสเชื่อมต่อ AI (ใส่ครั้งเดียว เครื่องนี้จะจำไว้)</label>
       <div class="field"><input type="password" id="keyInput" placeholder="วางรหัสที่นี่" autocomplete="off"></div>
-      <a class="hint" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">ขอรหัสฟรีที่ Google AI Studio ↗</a>
     </div>
     <div class="gate-error" id="gateError" role="alert"></div>
   </div>
@@ -1248,10 +1247,9 @@
   function renderEmpty() {
     const e = document.createElement('div');
     e.className = 'empty';
-    const n = data.memories.length;
     e.innerHTML = '<span class="logo-mark">N</span><h2></h2><p></p><div class="chips"></div>';
     e.querySelector('h2').textContent = 'สวัสดี ' + nick;
-    e.querySelector('p').textContent = n ? 'NadaAI จำคุณได้ ' + n + ' เรื่อง วันนี้อยากให้ช่วยอะไรดี' : 'วันนี้อยากให้ช่วยอะไรดี';
+    e.querySelector('p').textContent = 'วันนี้อยากให้ช่วยอะไรดี';
     const chips = e.querySelector('.chips');
     SUGGESTIONS.forEach((s, i) => {
       const b = document.createElement('button');
