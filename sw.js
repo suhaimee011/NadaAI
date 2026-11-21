@@ -1,7 +1,7 @@
 /* NadaAI — service worker: แค่ช่วยให้ "ติดตั้งลงหน้าจอหลัก" ได้ และเปิดแอปได้เร็วขึ้น/ออฟไลน์บางส่วน
    ไม่แตะคำขอไปยัง API ภายนอก (เช่น Google AI) เลย ปล่อยให้วิ่งผ่านเน็ตตามปกติเสมอ */
 const CACHE = 'nadaai-shell-v1';
-const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
+const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
