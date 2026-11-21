@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>NadaAI</title>
+
+<!-- ติดตั้งลงหน้าจอหลัก (PWA) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#070816">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NadaAI">
+
 <link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -712,6 +723,26 @@
     </section>
 
     <section class="set-card">
+      <h4>ประวัติแชท</h4>
+      <p class="desc" id="chatBackupInfo"></p>
+      <div class="mem-actions">
+        <button class="btn" id="chatExportBtn" type="button"><span data-icon="download" data-size="16"></span>สำรองแชท</button>
+        <button class="btn" id="chatImportBtn" type="button"><span data-icon="upload" data-size="16"></span>กู้คืนแชท</button>
+      </div>
+      <input type="file" id="chatFile" accept=".json,application/json" hidden>
+      <p class="voice-note">ใช้ย้ายประวัติแชทระหว่างเครื่องของคุณเอง เช่น โน้ตบุ๊ก ↔ มือถือ (ต้องใช้ชื่อเล่นเดียวกันทั้งสองเครื่อง) ไฟล์นี้มีบทสนทนาทั้งหมดของคุณอยู่ข้างใน จึง<strong>ไม่ควรส่งให้คนอื่น</strong> และรูปภาพ/ไฟล์แนบจะไม่ถูกรวมไว้ในไฟล์สำรองนี้</p>
+    </section>
+
+    <section class="set-card" id="installCard" style="display:none">
+      <h4>ติดตั้งเป็นแอป</h4>
+      <p class="desc">ติดตั้ง NadaAI ลงหน้าจอหลัก เปิดใช้งานได้เหมือนแอปทั่วไป ไม่ต้องเปิดเบราว์เซอร์/พิมพ์ลิงก์ทุกครั้ง</p>
+      <div class="mem-actions">
+        <button class="btn" id="installBtn" type="button" style="display:none"><span data-icon="download" data-size="16"></span>ติดตั้งลงหน้าจอหลัก</button>
+      </div>
+      <p class="voice-note" id="installIosNote" style="display:none">บน iPhone/iPad: แตะปุ่ม "แชร์" (ไอคอนสี่เหลี่ยมมีลูกศรชี้ขึ้น) แถบล่างของ Safari แล้วเลือก "เพิ่มไปยังหน้าจอโฮม"</p>
+    </section>
+
+    <section class="set-card">
       <h4>หน้าตา</h4>
       <div class="seg" id="themeSeg">
         <button type="button" data-theme-val="auto">อัตโนมัติ</button>
@@ -1018,6 +1049,7 @@
     renderSidebar();
     renderMessages();
     updateMemChip();
+    updateChatBackupInfo();
     updateSendState();
     input.focus();
   }
@@ -2689,6 +2721,52 @@
   $('memImportBtn').addEventListener('click', () => $('memFile').click());
   $('memFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; importMemories(f); });
 
+  /* ================= สำรอง/กู้คืนประวัติแชท (สำหรับย้ายข้ามเครื่องของตัวเอง) ================= */
+  function updateChatBackupInfo() {
+    const el = $('chatBackupInfo');
+    if (!el) return;
+    const n = data.chats.length;
+    el.textContent = n ? ('ตอนนี้มีประวัติแชท ' + n + ' แชท ในเครื่องนี้') : 'ยังไม่มีประวัติแชทในเครื่องนี้';
+  }
+  function exportChats() {
+    if (!data.chats.length) { toast('ยังไม่มีประวัติแชทให้สำรอง'); return; }
+    const d = new Date(), pad = (x) => String(x).padStart(2, '0');
+    const payload = { app: 'NadaAI', type: 'chat-backup', version: 1, exportedAt: d.toISOString(), nick: nick, chats: data.chats };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'NadaAI-chats-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast('สำรองแชท ' + data.chats.length + ' แชทแล้ว เอาไฟล์นี้ไปกู้คืนในอีกเครื่องได้เลย');
+  }
+  async function importChats(file) {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { toast('ไฟล์ใหญ่เกินไปสำหรับไฟล์สำรองแชท'); return; }
+    let obj;
+    try { obj = JSON.parse(await file.text()); } catch (e) { toast('อ่านไฟล์ไม่ได้ ต้องเป็นไฟล์สำรองแชทที่ส่งออกจาก NadaAI'); return; }
+    if (!obj || obj.type !== 'chat-backup' || !Array.isArray(obj.chats)) { toast('ไฟล์นี้ไม่ใช่ไฟล์สำรองแชทของ NadaAI'); return; }
+    const incoming = obj.chats.filter((c) => c && typeof c.id === 'string' && Array.isArray(c.messages));
+    if (!incoming.length) { toast('ไม่พบแชทในไฟล์นี้'); return; }
+    if (obj.nick && nick && obj.nick.toLowerCase() !== nick.toLowerCase() &&
+      !confirm('ไฟล์นี้สำรองมาจากชื่อเล่น "' + obj.nick + '" แต่เครื่องนี้ใช้ชื่อเล่น "' + nick + '"\n\nนำเข้าต่อไหม?')) return;
+    const mode = data.chats.length
+      ? confirm('ตอนนี้มีประวัติแชทอยู่แล้ว ' + data.chats.length + ' แชท\n\nตกลง = รวมกับของเดิม (ข้ามแชทที่ซ้ำ id)\nยกเลิก = แทนที่ของเดิมทั้งหมดด้วยไฟล์นี้')
+      : true;
+    if (mode) {
+      const have = new Set(data.chats.map((c) => c.id));
+      let added = 0, dup = 0;
+      incoming.forEach((c) => { if (have.has(c.id)) { dup++; return; } have.add(c.id); data.chats.push(c); added++; });
+      save(); currentId = null; renderSidebar(); renderMessages(); updateChatBackupInfo();
+      toast('นำเข้าแชทใหม่ ' + added + ' แชท' + (dup ? ' (ข้ามที่ซ้ำ ' + dup + ')' : ''));
+    } else {
+      data.chats = incoming; save(); currentId = null; renderSidebar(); renderMessages(); updateChatBackupInfo();
+      toast('แทนที่ประวัติแชทด้วยไฟล์นี้แล้ว (' + incoming.length + ' แชท)');
+    }
+  }
+  $('chatExportBtn').addEventListener('click', exportChats);
+  $('chatImportBtn').addEventListener('click', () => $('chatFile').click());
+  $('chatFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; importChats(f); });
+
   /* ================= ลูกเล่นปุ่มกด (คลื่นตอนแตะ) ================= */
   const RIPPLE_SEL = '.btn, .go, #sendBtn, .new-chat, .chip, #voiceAct, #voiceExit, #voiceBtn, .seg button, #attachMenu button, .attach, .mic, .act, .persona-chip';
   function initFx() {
@@ -2729,6 +2807,31 @@
     $('keyCurrent').textContent = 'ตอนนี้ใช้รหัสที่ลงท้ายด้วย ••••' + apiKey.slice(-4);
     toast('บันทึกรหัสแล้ว');
   });
+
+  /* ================= ติดตั้งลงหน้าจอหลัก (PWA) ================= */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+  }
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  let deferredInstall = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstall = e;
+    $('installCard').style.display = '';
+    $('installBtn').style.display = '';
+  });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; $('installCard').style.display = 'none'; });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#installBtn')) return;
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    deferredInstall.userChoice.finally(() => { deferredInstall = null; $('installCard').style.display = 'none'; });
+  });
+  if (!isStandalone() && isIos()) {
+    $('installCard').style.display = '';
+    $('installIosNote').style.display = '';
+  }
 
   /* ================= เริ่มต้น ================= */
   paintIcons();
