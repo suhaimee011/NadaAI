@@ -407,11 +407,6 @@
   .b-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .b-img { display: block; width: 220px; max-width: 100%; max-height: 280px; object-fit: cover; cursor: zoom-in; border-radius: 20px; border: 1px solid var(--glass-b); background: var(--code); box-shadow: 0 14px 34px -14px rgba(124,92,255,0.7); transition: transform 0.3s cubic-bezier(0.2, 1.3, 0.4, 1); }
   .b-img:hover { transform: scale(1.03) rotate(0.6deg); }
-  #genImgChip { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; padding: 8px 12px; border-radius: 14px; background: linear-gradient(90deg, rgba(124,92,255,0.18), rgba(255,79,163,0.18)); border: 1px solid var(--glass-b); color: var(--text); font-size: 13px; }
-  #genImgChip [data-icon] { color: var(--c3); flex: none; }
-  #genImgChip span:nth-child(2) { flex: 1; }
-  #genImgChip button { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px; }
-  #attachGenImgItem [data-icon] { color: var(--c3); }
   .u-files { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; max-width: 100%; }
   .u-file {
     position: relative; overflow: hidden; display: flex; align-items: center; gap: 10px; max-width: 270px; padding: 8px 15px 8px 8px; cursor: pointer;
@@ -637,15 +632,10 @@
           <button id="attachCamItem" type="button" role="menuitem"><span data-icon="camera" data-size="19"></span>ถ่ายรูป</button>
           <button id="attachImgItem" type="button" role="menuitem"><span data-icon="image" data-size="19"></span>รูปภาพ</button>
           <button id="attachDocItem" type="button" role="menuitem"><span data-icon="paperclip" data-size="19"></span>ไฟล์<small>PDF ข้อความ โค้ด</small></button>
-          <button id="attachGenImgItem" type="button" role="menuitem"><span data-icon="sparkle" data-size="19"></span>สร้างรูปด้วย AI<small>พิมพ์คำสั่งแล้วกดส่ง</small></button>
         </div>
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
         <input type="file" id="docInput" accept=".pdf,application/pdf,text/*,.md,.csv,.tsv,.json,.xml,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.py,.java,.c,.h,.cpp,.hpp,.cs,.go,.rs,.php,.rb,.sql,.yml,.yaml,.ini,.log,.tex,.r,.kt,.swift,.sh,.bat" multiple hidden>
         <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-        <div id="genImgChip" style="display:none">
-          <span data-icon="sparkle" data-size="15"></span><span>โหมดสร้างรูปภาพ — พิมพ์สิ่งที่อยากให้วาด แล้วกดส่ง</span>
-          <button id="genImgCancel" type="button" aria-label="ออกจากโหมดสร้างรูปภาพ">&times;</button>
-        </div>
         <textarea id="input" rows="1" placeholder="พิมพ์ข้อความ..." aria-label="ข้อความ"></textarea>
         <button id="micBtn" class="mic" type="button" title="พูดแทนการพิมพ์" aria-label="พูดแทนการพิมพ์" data-icon="mic"></button>
         <button id="sendBtn" type="submit" aria-label="ส่ง" disabled></button>
@@ -799,12 +789,6 @@
     balanced: ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'],
     smart:    ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite']
   };
-  // โมเดลสำหรับ "สร้างรูปภาพ" (ตระกูล Nano Banana) ลองตัวแรกก่อน ถ้าใช้ไม่ได้/โควตาหมดค่อยลองตัวถัดไป
-  const IMAGE_MODELS = [
-    'gemini-3-pro-image',          // Nano Banana Pro — คุณภาพสูงสุด
-    'gemini-3.1-flash-lite-image', // Nano Banana 2 Lite — เร็ว โควตาเยอะกว่า
-    'gemini-3.1-flash-image'       // Nano Banana 2 / 2.1 — บาลานซ์กลางๆ
-  ];
   const SPEED_DESC = {
     fast: 'ใช้โมเดล Lite คิดน้อยที่สุด ตอบเร็วสุด แต่คำตอบอาจเรียบง่ายกว่า',
     balanced: 'แนะนำ: ลดเวลาคิดลงให้ตอบไว แต่ยังฉลาดดี',
@@ -1080,10 +1064,35 @@
   $('nickInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); enter(); } });
   $('keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); enter(); } });
 
+  /* ================= กันปัดจอ (swipe back) หลุดออกจากแอป =================
+     ใช้ร่วมกันทุกจุดที่เป็น "จอเต็ม/ป๊อปอัพทับหน้าหลัก": แถบประวัติ (มือถือ), modal ต่างๆ,
+     ดูรูปขนาดใหญ่ (lightbox), โหมดเสียง — เปิดจุดไหนก็จองประวัติไว้ 1 ขั้น
+     พอผู้ใช้ปัดกลับ/กดปุ่มย้อนกลับของเครื่อง จะปิดแค่จุดนั้นแทนที่จะออกจากแอปทั้งหมด */
+  let uiLayerActive = false;
+  function pushUiLayer() {
+    if (!uiLayerActive) { uiLayerActive = true; history.pushState({ nadaaiLayer: true }, ''); }
+  }
+  function popUiLayerIfActive() {
+    if (uiLayerActive) {
+      uiLayerActive = false;
+      if (history.state && history.state.nadaaiLayer) history.back();
+    }
+  }
+  function closeAllUiLayersVisual() {
+    document.querySelectorAll('.overlay.show').forEach((o) => o.classList.remove('show'));
+    $('lightbox').classList.remove('show');
+    if (typeof voiceMode !== 'undefined' && voiceMode) exitVoiceModeVisual();
+    if ($('sidebar').classList.contains('open')) { $('sidebar').classList.remove('open'); $('backdrop').classList.remove('show'); }
+  }
+  window.addEventListener('popstate', () => {
+    if (uiLayerActive) { uiLayerActive = false; closeAllUiLayersVisual(); }
+  });
+
   /* ================= แถบประวัติ ================= */
-  function closeSidebar() { $('sidebar').classList.remove('open'); $('backdrop').classList.remove('show'); }
+  function openSidebar() { $('sidebar').classList.add('open'); $('backdrop').classList.add('show'); pushUiLayer(); }
+  function closeSidebar() { $('sidebar').classList.remove('open'); $('backdrop').classList.remove('show'); popUiLayerIfActive(); }
   $('menuBtn').addEventListener('click', () => {
-    if (isMobile()) { $('sidebar').classList.toggle('open'); $('backdrop').classList.toggle('show'); }
+    if (isMobile()) { $('sidebar').classList.contains('open') ? closeSidebar() : openSidebar(); }
     else $('chatScreen').classList.toggle('collapsed');
   });
   $('backdrop').addEventListener('click', closeSidebar);
@@ -1437,17 +1446,6 @@
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     return new Blob([arr], { type: mime || 'image/png' });
   }
-  async function processGeneratedImage(b64, mime) {
-    const m = mime || 'image/png';
-    const blob = b64ToBlob(b64, m);
-    const bmp = await loadBitmap(blob);
-    const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
-    const th = drawScaled(bmp, w, h, 240, 0.75);
-    if (bmp.close) { try { bmp.close(); } catch (e) {} }
-    const id = uid();
-    await imgPut(id, { mime: m, data: b64 });
-    return { id, mime: m, thumb: th.url, w, h };
-  }
   function readAsBase64(file) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -1587,11 +1585,13 @@
     const lb = $('lightbox'), img = lb.querySelector('img');
     img.src = fallback;
     lb.classList.add('show');
+    pushUiLayer();
     const d = await getImageData(id);
     if (d && lb.classList.contains('show')) img.src = 'data:' + d.mime + ';base64,' + d.data;
   }
-  $('lightbox').addEventListener('click', () => $('lightbox').classList.remove('show'));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('lightbox').classList.remove('show'); });
+  function closeLightbox() { $('lightbox').classList.remove('show'); popUiLayerIfActive(); }
+  $('lightbox').addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 
   /* ----- เมนู + (ถ่ายรูป / รูปภาพ / ไฟล์) ----- */
   const isTouchDevice = () => (window.matchMedia && matchMedia('(pointer: coarse)').matches) || (navigator.maxTouchPoints || 0) > 1;
@@ -1609,17 +1609,6 @@
   $('attachDocItem').addEventListener('click', () => { closeAttachMenu(); $('docInput').click(); });
   $('attachCamItem').addEventListener('click', () => { closeAttachMenu(); $('camInput').click(); });
   ['fileInput', 'docInput', 'camInput'].forEach((id) => $(id).addEventListener('change', (e) => { addAttachFiles(e.target.files); e.target.value = ''; }));
-
-  /* ----- โหมดสร้างรูปภาพด้วย AI ----- */
-  let imageGenMode = false;
-  function setImageGenMode(on) {
-    imageGenMode = on;
-    $('genImgChip').style.display = on ? '' : 'none';
-    input.placeholder = on ? 'อยากให้ NadaAI วาดรูปอะไร...' : 'พิมพ์ข้อความ...';
-    if (on) input.focus();
-  }
-  $('attachGenImgItem').addEventListener('click', () => { closeAttachMenu(); setImageGenMode(true); });
-  $('genImgCancel').addEventListener('click', () => setImageGenMode(false));
 
   /* ----- วางจากคลิปบอร์ด / ลากมาวาง ----- */
   document.addEventListener('paste', (e) => {
@@ -1794,90 +1783,10 @@
     return msg;
   }
 
-  /* ----- สร้างรูปภาพด้วย AI ----- */
-  async function sendImagePrompt(prompt) {
-    const owner = nick;
-    const existing = curChat();
-    const chat = existing || { id: uid(), title: prompt.slice(0, 40) || 'สร้างรูปภาพ', updated: Date.now(), messages: [] };
-
-    const umsg = { role: 'user', text: prompt };
-    chat.messages.push(umsg);
-    const userRow = addUser(prompt, chat.messages.length - 1, [], []);
-    input.value = ''; autosize(); setImageGenMode(false);
-    const bot = addBot();
-    bot.row.classList.add('pending');
-    bot.md.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
-    toBottom();
-    setBusy(true);
-    abortCtrl = new AbortController();
-    const signal = abortCtrl.signal;
-
-    let reply = '', images = [], failure = null;
-    try {
-      const { res, model } = await callGemini(
-        { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } },
-        { stream: false, signal, models: IMAGE_MODELS });
-      if (!res) throw new Error('ส่งคำขอไม่สำเร็จ ลองใหม่อีกครั้ง');
-      if (!res.ok) {
-        const ed = await res.json().catch(() => ({}));
-        const em = (ed && ed.error && ed.error.message) || ('HTTP ' + res.status);
-        if (res.status === 404 || res.status === 403) throw new Error('บัญชีของคุณยังใช้ฟีเจอร์สร้างรูปภาพนี้ไม่ได้ (' + em + ')');
-        throw new Error(friendlyError(res, em));
-      }
-      const json = await res.json();
-      const parts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-      for (const p of parts) {
-        if (p.text) reply += p.text;
-        else if (p.inlineData && p.inlineData.data) {
-          try { images.push(await processGeneratedImage(p.inlineData.data, p.inlineData.mimeType)); }
-          catch (e) {}
-        }
-      }
-      const blockReason = json.promptFeedback && json.promptFeedback.blockReason;
-      if (!images.length && !reply && blockReason) reply = 'ขอโทษด้วย วาดรูปนี้ให้ไม่ได้ (เนื้อหาอาจไม่เหมาะสม) ลองเปลี่ยนคำสั่งดูนะ';
-      else if (!images.length && !reply) reply = 'ขอโทษด้วย ตอนนี้วาดรูปไม่สำเร็จ ลองใหม่อีกครั้ง';
-    } catch (err) {
-      if (!(err && err.name === 'AbortError')) failure = err;
-    }
-
-    const aborted = signal.aborted;
-    abortCtrl = null;
-
-    if (failure || (!reply && !images.length && aborted)) {
-      bot.row.remove(); userRow.remove(); chat.messages.pop();
-      input.value = prompt; autosize(); updateSendState();
-      setBusy(false);
-      if (failure) addError(failure.message);
-      else if (!existing && !data.chats.length) renderMessages();
-      input.focus();
-      return;
-    }
-
-    bot.row.classList.remove('pending');
-    setBot(bot, reply);
-    if (images.length) setBotImages(bot, images);
-    const mmsg = { role: 'model', text: reply };
-    if (images.length) mmsg.images = images;
-    chat.messages.push(mmsg);
-    chat.updated = Date.now();
-    if (!existing) data.chats.push(chat);
-    currentId = chat.id;
-    data.chats.sort((a, b) => b.updated - a.updated);
-    save();
-    renderSidebar();
-    setBusy(false);
-    toBottom();
-    input.focus();
-  }
-
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     if (busy) { if (abortCtrl) abortCtrl.abort(); return; }
     const text = input.value.trim();
-    if (imageGenMode) {
-      if (text) { stopSpeaking(); unlockAudio(); sendImagePrompt(text); }
-      return;
-    }
     if (text || pending.length) {
       stopSpeaking(); unlockAudio();
       const atts = pending; pending = []; renderStrip();
@@ -2703,13 +2612,15 @@
     $('voiceBtn').classList.add('on');
     $('voiceBtn').setAttribute('aria-pressed', 'true');
     $('voiceStage').classList.add('show');
+    pushUiLayer();
     unlockAudio();
     if (!SR) toast('เบราว์เซอร์นี้ฟังเสียงไม่ได้ จะพูดตอบอย่างเดียว พิมพ์ถามแล้ว NadaAI จะอ่านคำตอบให้');
     setVoiceState(busy ? 'thinking' : 'idle');
     startOrb();
     if (SR && !busy) startListening();
   }
-  function exitVoiceMode() {
+  /* ปิดโหมดเสียง (หยุดฟัง/หยุดพูด/ซ่อนจอ) แต่ไม่ยุ่งกับ history — ใช้ตอนปิดจาก popstate (ปัดกลับ) เพื่อไม่ให้ไปเรียก history.back() ซ้ำ */
+  function exitVoiceModeVisual() {
     voiceMode = false;
     stopListening(true);
     stopSpeaking();
@@ -2717,6 +2628,10 @@
     $('voiceBtn').setAttribute('aria-pressed', 'false');
     $('voiceStage').classList.remove('show');
     setVoiceState('idle');
+  }
+  function exitVoiceMode() {
+    exitVoiceModeVisual();
+    popUiLayerIfActive();
   }
   $('voiceBtn').addEventListener('click', () => { if (voiceMode) exitVoiceMode(); else enterVoiceMode(); });
   $('voiceExit').addEventListener('click', exitVoiceMode);
@@ -2932,28 +2847,12 @@
       updateMemChip();
     }
     $(id).classList.add('show');
-    if (!modalHistoryActive) {
-      modalHistoryActive = true;
-      history.pushState({ nadaaiOverlay: true }, '');
-    }
+    pushUiLayer();
   }
-  /* ปิด modal ให้เป็นส่วนหนึ่งของ "ประวัติการนำทาง" ของเบราว์เซอร์
-     เพื่อไม่ให้การปัดกลับ (swipe back) ตอนเปิดเป็นแอป (standalone) หลุดออกจากแอปไปเลย
-     แทนที่จะแค่ปิด modal ที่เปิดค้างอยู่ */
-  let modalHistoryActive = false;
   function closeModals() {
     document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show'));
-    if (modalHistoryActive) {
-      modalHistoryActive = false;
-      if (history.state && history.state.nadaaiOverlay) history.back();
-    }
+    popUiLayerIfActive();
   }
-  window.addEventListener('popstate', () => {
-    if (modalHistoryActive) {
-      modalHistoryActive = false;
-      document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show'));
-    }
-  });
   document.querySelectorAll('.overlay').forEach((o) => {
     o.addEventListener('click', (e) => { if (e.target === o || e.target.closest('[data-close]')) closeModals(); });
   });
