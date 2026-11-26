@@ -417,6 +417,20 @@
   #lightbox.show { display: flex; }
   #lightbox.show img { animation: modalIn 0.45s cubic-bezier(0.2, 1.1, 0.3, 1) both; }
   #lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 18px; background: #fff; box-shadow: 0 30px 90px -20px rgba(124,92,255,0.8); }
+  #installBanner {
+    position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 45;
+    display: none; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-radius: 20px; max-width: 420px; margin: 0 auto;
+    background: var(--card); border: 1px solid var(--glass-b); box-shadow: 0 20px 50px -14px rgba(124,92,255,0.65);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  #installBanner.show { display: flex; animation: modalIn 0.4s cubic-bezier(0.2, 1.2, 0.3, 1) both; }
+  #installBanner .logo-mark.sm { flex: none; width: 36px; height: 36px; font-size: 16px; }
+  #installBanner .installBanner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  #installBanner .installBanner-text strong { font-size: 14px; color: var(--text); }
+  #installBanner .installBanner-text span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+  #installBanner .installBanner-actions { flex: none; display: flex; align-items: center; gap: 6px; }
+  #installBanner .installBanner-actions .btn { padding: 8px 14px; font-size: 13px; }
+  #installBanner .installBanner-actions .act { width: 32px; height: 32px; }
   #app.dragging::after {
     content: "วางรูปหรือไฟล์ที่นี่เพื่อแนบ"; position: absolute; inset: 10px; z-index: 20; pointer-events: none; display: grid; place-items: center;
     border: 2px dashed var(--c2); border-radius: 32px; background: rgba(34,211,238,0.1); backdrop-filter: blur(6px);
@@ -766,6 +780,26 @@
         <button class="btn primary" id="keySaveBtn" type="button">บันทึก</button>
       </div>
     </section>
+
+    <section class="set-card">
+      <h4>แชร์แอปนี้ให้เพื่อน</h4>
+      <p class="desc">คัดลอกลิงก์เว็บนี้ส่งให้เพื่อน เพื่อนกดลิงก์แล้วเข้าแอปได้เลย (เพื่อนต้องใส่รหัสเชื่อมต่อ AI ของตัวเอง — ไม่ใช้ของคุณร่วมกัน) ถ้าเบราว์เซอร์ของเพื่อนรองรับ ก็จะมีตัวเลือก "ติดตั้งลงหน้าจอหลัก" ให้กดในหน้าตั้งค่าเหมือนกัน</p>
+      <div class="mem-actions">
+        <button class="btn" id="copyLinkBtn" type="button"><span data-icon="copy" data-size="16"></span>คัดลอกลิงก์</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="installBanner" role="dialog" aria-label="ติดตั้งแอป">
+  <span class="logo-mark sm" aria-hidden="true">N</span>
+  <div class="installBanner-text">
+    <strong>ติดตั้ง NadaAI</strong>
+    <span id="installBannerDesc">เพิ่มไอคอนไว้หน้าจอหลัก เปิดได้เร็วเหมือนแอปทั่วไป</span>
+  </div>
+  <div class="installBanner-actions">
+    <button class="btn primary" id="installBannerBtn" type="button" style="display:none">ติดตั้ง</button>
+    <button class="act" id="installBannerClose" type="button" aria-label="ปิด" data-icon="x"></button>
   </div>
 </div>
 
@@ -2822,6 +2856,13 @@
   $('chatImportBtn').addEventListener('click', () => $('chatFile').click());
   $('chatFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; importChats(f); });
 
+  /* ================= คัดลอกลิงก์เว็บ (แชร์ให้เพื่อน) ================= */
+  $('copyLinkBtn').addEventListener('click', () => {
+    const url = location.href.split('#')[0].split('?')[0];
+    copyText(url);
+    toast('คัดลอกลิงก์แล้ว ส่งให้เพื่อนได้เลย');
+  });
+
   /* ================= ลูกเล่นปุ่มกด (คลื่นตอนแตะ) ================= */
   const RIPPLE_SEL = '.btn, .go, #sendBtn, .new-chat, .chip, #voiceAct, #voiceExit, #voiceBtn, .seg button, #attachMenu button, .attach, .mic, .act, .persona-chip';
   function initFx() {
@@ -2873,23 +2914,54 @@
   }
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  const INSTALL_DISMISS_KEY = 'nadaai_install_dismissed';
   let deferredInstall = null;
+
+  function hideInstallBanner() { $('installBanner').classList.remove('show'); }
+  function showInstallBanner(mode) {
+    if (lsGet(INSTALL_DISMISS_KEY)) return; // เคยกดปิดแล้ว ไม่ต้องรบกวนซ้ำ
+    if (mode === 'android') {
+      $('installBannerDesc').textContent = 'เพิ่มไอคอนไว้หน้าจอหลัก เปิดได้เร็วเหมือนแอปทั่วไป';
+      $('installBannerBtn').style.display = '';
+    } else {
+      $('installBannerDesc').textContent = 'แตะปุ่มแชร์ (ไอคอนสี่เหลี่ยมมีลูกศรชี้ขึ้น) แถบล่างของ Safari แล้วเลือก "เพิ่มไปยังหน้าจอโฮม"';
+      $('installBannerBtn').style.display = 'none';
+    }
+    $('installBanner').classList.add('show');
+  }
+  $('installBannerClose').addEventListener('click', () => { hideInstallBanner(); lsSet(INSTALL_DISMISS_KEY, '1'); });
+  $('installBannerBtn').addEventListener('click', () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    deferredInstall.userChoice.finally(() => {
+      deferredInstall = null;
+      hideInstallBanner();
+      $('installCard').style.display = 'none';
+    });
+  });
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstall = e;
     $('installCard').style.display = '';
     $('installBtn').style.display = '';
+    showInstallBanner('android');
   });
-  window.addEventListener('appinstalled', () => { deferredInstall = null; $('installCard').style.display = 'none'; });
+  window.addEventListener('appinstalled', () => {
+    deferredInstall = null;
+    $('installCard').style.display = 'none';
+    hideInstallBanner();
+  });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#installBtn')) return;
     if (!deferredInstall) return;
     deferredInstall.prompt();
-    deferredInstall.userChoice.finally(() => { deferredInstall = null; $('installCard').style.display = 'none'; });
+    deferredInstall.userChoice.finally(() => { deferredInstall = null; $('installCard').style.display = 'none'; hideInstallBanner(); });
   });
   if (!isStandalone() && isIos()) {
     $('installCard').style.display = '';
     $('installIosNote').style.display = '';
+    showInstallBanner('ios');
   }
 
   /* ================= เริ่มต้น ================= */
